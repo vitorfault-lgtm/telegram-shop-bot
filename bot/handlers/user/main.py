@@ -8,7 +8,6 @@ router = Router()
 
 ADMIN_ID = 6516079642 
 
-# --- Coupon Logic Add Kiya Hai ---
 def get_discounted_price(coupon, original_price):
     coupons = {
         "VFG100OFF": 100,
@@ -21,7 +20,6 @@ def get_discounted_price(coupon, original_price):
     final_price = max(original_price - discount, 0)
     return final_price, discount
 
-# --- 1. Main Bottom Menu (As It Is) ---
 def get_custom_menu():
     buttons = [
         [KeyboardButton(text="Fluorite Keys"), KeyboardButton(text="Android Keys")],
@@ -32,7 +30,6 @@ def get_custom_menu():
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# --- 2. Master Product Database (As It Is) ---
 PRODUCT_DB = {
     "fl_7d": {"name": "Fluorite 7 Day Key", "price": 900},
     "fl_1m": {"name": "Fluorite 1 Month Key", "price": 1500},
@@ -53,7 +50,6 @@ PRODUCT_DB = {
     "mig_pro": {"name": "Migul iOS Panel + Injection Kit", "price": 2500}
 }
 
-# --- 3. Main Reply Trigger Handlers (As It Is) ---
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
@@ -143,7 +139,6 @@ async def handle_profile(message: Message):
     )
     await message.answer(profile_text)
 
-# --- 4. Updated E-Commerce Workflow (Coupons Added) ---
 @router.callback_query(F.data.startswith("buy_"))
 async def process_buy_button(callback: CallbackQuery, state: FSMContext):
     product_code = callback.data.split("buy_")[1]
@@ -185,17 +180,52 @@ async def process_coupon(message: Message, state: FSMContext):
 @router.callback_query(F.data == "proceed_payment")
 async def show_payment_gateway(callback: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
+    
     qr_text = (
         f"📲 **SECURE UPI GATEWAY INSTANCE**\n\n"
         f"📦 **Order Pack:** {data['current_product']}\n"
         f"🔺 **Net Payable Amount:** {data.get('final_price', data['base_price'])} INR\n\n"
         f"📌 **UPI ID:** `bharatpe.8y0l1s2n7z76332@fbpe` (Tap to Copy)\n\n"
-        f"👉 **How to Pay:**\nComplete the transfer and click below to upload your screenshot."
+        f"👉 **How to Pay:**\n"
+        f"1. Scan the QR Code attached above or copy the UPI ID.\n"
+        f"2. Complete the transfer of exactly **{data.get('final_price', data['base_price'])} INR**.\n"
+        f"3. Take a clear screenshot of the successful transaction confirmation screen.\n\n"
+        f"⚠️ **Crucial:** Once completed, click the button below to upload your transaction validation record."
     )
+              
     screenshot_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📸 Upload Payment Screenshot", callback_data="upload_ss")]
     ])
-    await callback.message.edit_text(qr_text, reply_markup=screenshot_kb)
+    
+    await callback.message.delete()
+    
+    qr_filename = "my_qr.png"
+    
+    if os.path.exists(qr_filename):
+        try:
+            with open(qr_filename, "rb") as image_file:
+                photo_bytes = image_file.read()
+                photo_payload = BufferedInputFile(photo_bytes, filename=qr_filename)
+                
+                await bot.send_photo(
+                    chat_id=callback.message.chat.id,
+                    photo=photo_payload,
+                    caption=qr_text,
+                    reply_markup=screenshot_kb
+                )
+        except Exception as e:
+            await bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=f"⚠️ **Error reading file:** Please check image health.\n\n{qr_text}",
+                reply_markup=screenshot_kb
+            )
+    else:
+        await bot.send_message(
+            chat_id=callback.message.chat.id,
+            text=f"⚠️ **Error:** `{qr_filename}` file not found in project folder!\n\n{qr_text}",
+            reply_markup=screenshot_kb
+        )
+        
     await callback.answer()
 
 @router.callback_query(F.data == "upload_ss")
@@ -208,24 +238,45 @@ async def ask_screenshot(callback: CallbackQuery, state: FSMContext):
 async def handle_payment_screenshot(message: Message, state: FSMContext, bot: Bot):
     photo_id = message.photo[-1].file_id
     data = await state.get_data()
+    
+    user_info = f"👤 **Client:** {message.from_user.full_name} (@{message.from_user.username})\n🆔 **User ID:** `{message.from_user.id}`"
+    
     admin_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Approve Order", callback_data=f"admin_approve_{message.from_user.id}"),
-         InlineKeyboardButton(text="❌ Reject Order", callback_data=f"admin_reject_{message.from_user.id}")]
+        [
+            InlineKeyboardButton(text="✅ Approve Order", callback_data=f"admin_approve_{message.from_user.id}"),
+            InlineKeyboardButton(text="❌ Reject Order", callback_data=f"admin_reject_{message.from_user.id}")
+        ]
     ])
-    await bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=f"🔔 **Incoming Purchase!**\nUser: {message.from_user.full_name}\nProduct: {data['current_product']}\nAmount: {data.get('final_price', data['base_price'])} INR", reply_markup=admin_kb)
-    await message.answer("⏳ **Please wait for 10 minutes.** Our system is verifying your payment.")
+    
+    await bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=photo_id,
+        caption=f"🔔 **Incoming Store Purchase Request!**\n\n{user_info}\n📦 **Product:** {data['current_product']}\n💰 **Transferred:** {data.get('final_price', data['base_price'])} INR",
+        reply_markup=admin_kb
+    )
+    
+    await message.answer("⏳ **Please wait for 10 minutes to approve your payment.**\nOur automated confirmation protocol is verifying the ledger receipt transaction.")
     await state.clear()
 
 @router.callback_query(F.data.startswith("admin_approve_"))
 async def admin_approve(callback: CallbackQuery, bot: Bot):
     client_id = int(callback.data.split("admin_approve_")[1])
-    await bot.send_message(chat_id=client_id, text="🎉 **Payment Verified Successfully!**\nHere is your key: `FV-SH1-VAND-SH19-0726-OK`")
-    await callback.message.edit_caption(caption=callback.message.caption + "\n\n🟢 **ORDER STATE: DELIVERED**")
-    await callback.answer("Order Approved!")
+    delivered_stock = "🔑 `STOCK-LICENSE-KEY: FV-SH1-VAND-SH19-0726-OK`"
+    
+    await bot.send_message(
+        chat_id=client_id,
+        text=f"🎉 **Payment Verified Successfully!**\nThank you for choosing us. Here is your ordered license asset:\n\n{delivered_stock}\n\n*Keep this safe. For configuration help, check out @vitor_fault*"
+    )
+    await callback.message.edit_caption(caption=callback.message.caption + "\n\n🟢 **ORDER STATE: COMPLETED & DELIVERED**")
+    await callback.answer("Order successfully processed and keys dispatched!", show_alert=True)
 
 @router.callback_query(F.data.startswith("admin_reject_"))
 async def admin_reject(callback: CallbackQuery, bot: Bot):
     client_id = int(callback.data.split("admin_reject_")[1])
-    await bot.send_message(chat_id=client_id, text="❌ **Payment Audit Failed!** Please contact support.")
-    await callback.message.edit_caption(caption=callback.message.caption + "\n\n🔴 **ORDER STATE: REJECTED**")
-    await callback.answer("Order Rejected!")
+    
+    await bot.send_message(
+        chat_id=client_id,
+        text="❌ **Payment Audit Verification Failed!**\nThe verification agent rejected your proof of purchase file. If this is an error, please establish direct contact with support at @vitor_fault."
+    )
+    await callback.message.edit_caption(caption=callback.message.caption + "\n\n🔴 **ORDER STATE: AUDIT REJECTED / DISMISS**")
+    await callback.answer("Order rejected. Client notified.", show_alert=True)
