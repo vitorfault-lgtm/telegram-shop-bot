@@ -17,6 +17,38 @@ AWAITING_COUPON = 1
 AWAITING_KEY_ADD = 2
 AWAITING_COUPON_ADD = 3
 AWAITING_BLOCK_USER = 4
+AWAITING_PRODUCT_ADD = 5
+AWAITING_PRICE_EDIT = 6
+
+# Default Categories & Products structure (If DB is empty)
+DEFAULT_PRODUCTS = {
+    "💎 Fluorite Keys": [
+        ("7 Day Key | 900 INR", "Fluorite 7 Day Key", 900),
+        ("1 Month Key | 1500 INR", "Fluorite 1 Month Key", 1500)
+    ],
+    "🤖 Android Keys": [
+        ("7 Day Key | 600 INR", "Android 7 Day Key", 600),
+        ("1 Month Key | 1000 INR", "Android 1 Month Key", 1000),
+        ("Full Season Key | 2000 INR", "Android Full Season Key", 2000)
+    ],
+    "📱 Full iOS Panel": [
+        ("Full iOS Panel | 3000 INR", "Full iOS Panel", 3000)
+    ],
+    "🛠️ Full Android Panel": [
+        ("Full Android Panel | 2000 INR", "Full Android Panel", 2000)
+    ],
+    "📦 GBox": [
+        ("GBox 6 Month | 1000 INR", "GBox 6 Month", 1000),
+        ("GBox 1 Year | 1500 INR", "GBox 1 Year", 1500)
+    ],
+    "✍️ Esign": [
+        ("Esign 1 Year Certificate | 800 INR", "Esign 1 Year Certificate", 800)
+    ],
+    "🔑 Monite Key": [
+        ("7 Day Key | 600 INR", "Monite 7 Day Key", 600),
+        ("31 Days Key | 1000 INR", "Monite 31 Days Key", 1000)
+    ]
+}
 
 # ================= DATABASE SETUP =================
 def init_db():
@@ -46,6 +78,24 @@ def init_db():
                         status TEXT
                     )''')
 
+    cursor.execute('''CREATE TABLE IF NOT EXISTS products (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        category TEXT,
+                        btn_label TEXT,
+                        item_name TEXT,
+                        price INT
+                    )''')
+
+    # Seed initial products if table is empty
+    cursor.execute("SELECT COUNT(*) FROM products")
+    if cursor.fetchone()[0] == 0:
+        for cat, items in DEFAULT_PRODUCTS.items():
+            for label, item_name, price in items:
+                cursor.execute(
+                    "INSERT INTO products (category, btn_label, item_name, price) VALUES (?, ?, ?, ?)",
+                    (cat, label, item_name, price)
+                )
+
     default_coupons = [
         ("IOSKEY300D", 300), ("KEYS200D", 200), 
         ("VIPOFF500D", 500), ("PROMO100D", 100), ("SAVE400D", 400)
@@ -64,6 +114,23 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Helper DB Functions for Products
+def get_categories_from_db():
+    conn = sqlite3.connect("shop_data.db")
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT category FROM products")
+    rows = c.fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+def get_products_by_category(category):
+    conn = sqlite3.connect("shop_data.db")
+    c = conn.cursor()
+    c.execute("SELECT id, btn_label, item_name, price FROM products WHERE category=?", (category,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
 
 # Markdown Escaper
 def esc(text):
@@ -149,7 +216,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.last_name:
         full_name += f" {esc(user.last_name)}"
 
-    # Exact format as requested
     admin_caption = (
         f"🔔 **Incoming Store Purchase Request!**\n\n"
         f"👤 **Client:** {full_name} {username_str}\n"
@@ -158,7 +224,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 **Transferred:** {amount} INR"
     )
 
-    # Forwarding Photo + Details to Admin
     await context.bot.send_photo(
         chat_id=ADMIN_ID,
         photo=update.message.photo[-1].file_id,
@@ -184,10 +249,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Admin Menu Options
     if user_id == ADMIN_ID:
         if text == "📦 Manage Products":
-            kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Add Key", callback_data="admin_add_key"), InlineKeyboardButton("➖ Remove Key", callback_data="admin_rem_key")]
-            ])
-            await update.message.reply_text("📦 **Manage Products & Keys Stock:**", reply_markup=kb)
+            categories = get_categories_from_db()
+            kb = []
+            for cat in categories:
+                kb.append([InlineKeyboardButton(f"📁 {cat}", callback_data=f"admcat_{cat}")])
+            
+            kb.append([InlineKeyboardButton("➕ Add Key Stock", callback_data="admin_add_key"), InlineKeyboardButton("➖ Remove Key Stock", callback_data="admin_rem_key")])
+            await update.message.reply_text("📦 **Manage Product Categories & Price List:**\n\nSelect a category to edit prices or add new products:", reply_markup=InlineKeyboardMarkup(kb))
             return
 
         elif text == "📋 Orders":
@@ -234,19 +302,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # Customer Options
-    products = {
-        "💎 Fluorite Keys": [("7 Day Key | 900 INR", "pay_Fluorite 7 Day Key_900"), ("1 Month Key | 1500 INR", "pay_Fluorite 1 Month Key_1500")],
-        "🤖 Android Keys": [("7 Day Key | 600 INR", "pay_Android 7 Day Key_600"), ("1 Month Key | 1000 INR", "pay_Android 1 Month Key_1000"), ("Full Season Key | 2000 INR", "pay_Android Full Season Key_2000")],
-        "📱 Full iOS Panel": [("Full iOS Panel | 3000 INR", "pay_Full iOS Panel_3000")],
-        "🛠️ Full Android Panel": [("Full Android Panel | 2000 INR", "pay_Full Android Panel_2000")],
-        "📦 GBox": [("GBox 6 Month | 1000 INR", "pay_GBox 6 Month_1000"), ("GBox 1 Year | 1500 INR", "pay_GBox 1 Year_1500")],
-        "✍️ Esign": [("Esign 1 Year Certificate | 800 INR", "pay_Esign 1 Year Certificate_800")],
-        "🔑 Monite Key": [("7 Day Key | 600 INR", "pay_Monite 7 Day Key_600"), ("31 Days Key | 1000 INR", "pay_Monite 31 Days Key_1000")]
-    }
+    categories = get_categories_from_db()
 
-    if text in products:
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data=data)] for label, data in products[text]])
-        await update.message.reply_text(f"Select option for {text}:", reply_markup=kb)
+    if text in categories:
+        products = get_products_by_category(text)
+        kb = []
+        for p_id, btn_label, item_name, price in products:
+            cb_data = f"pay_{item_name}_{price}"
+            kb.append([InlineKeyboardButton(btn_label, callback_data=cb_data)])
+        
+        await update.message.reply_text(f"Select option for {text}:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif text == "👤 Profile":
         user = update.effective_user
@@ -315,6 +380,51 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['discount_saved'] = 0
         await send_payment_qr(query.message.chat_id, context, item_name, int(amount), query.message)
 
+    # ADMIN PRODUCT CATEGORY SELECTION
+    elif data.startswith("admcat_"):
+        await query.answer()
+        category = data.split("_", 1)[1]
+        products = get_products_by_category(category)
+        
+        msg = f"📂 **Category:** `{category}`\n\n**Current Products & Prices:**\n"
+        for _, btn_label, _, price in products:
+            msg += f"• {btn_label}\n"
+            
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit Prices", callback_data=f"admeditp_{category}"), InlineKeyboardButton("➕ Add Product", callback_data=f"admaddp_{category}")]
+        ])
+        await query.message.reply_text(msg, parse_mode="Markdown", reply_markup=kb)
+
+    elif data.startswith("admaddp_"):
+        await query.answer()
+        category = data.split("_", 1)[1]
+        context.user_data['target_category'] = category
+        await query.message.reply_text(
+            f"➕ **Add Product in `{category}`**\n\n"
+            f"Please enter your product with price in the chat now:\n"
+            f"*(Example: `1 DAY KEY | 150 INR`)*",
+            parse_mode="Markdown"
+        )
+        return AWAITING_PRODUCT_ADD
+
+    elif data.startswith("admeditp_"):
+        await query.answer()
+        category = data.split("_", 1)[1]
+        products = get_products_by_category(category)
+        
+        kb = []
+        for p_id, btn_label, _, _ in products:
+            kb.append([InlineKeyboardButton(f"✏️ {btn_label}", callback_data=f"selpedit_{p_id}")])
+            
+        await query.message.reply_text("Select product to edit price:", reply_markup=InlineKeyboardMarkup(kb))
+
+    elif data.startswith("selpedit_"):
+        await query.answer()
+        p_id = data.split("_")[1]
+        context.user_data['target_pid'] = p_id
+        await query.message.reply_text("✏️ **Please enter the new price (INR) for this product:**", parse_mode="Markdown")
+        return AWAITING_PRICE_EDIT
+
     # APPROVE BUTTON ACTION
     elif data.startswith("appr_"):
         _, order_id, user_id = data.split("_")
@@ -341,7 +451,6 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=int(user_id), text=delivery_msg, parse_mode="Markdown")
             
-            # Updates message text exactly like the screenshot
             updated_caption = f"{query.message.caption}\n\n🟢 **ORDER STATE: COMPLETED & DELIVERED**"
             await query.edit_message_caption(caption=updated_caption, reply_markup=None, parse_mode="Markdown")
         else:
@@ -449,6 +558,68 @@ async def process_user_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ **Invalid Coupon Code.** Please try again.")
     return ConversationHandler.END
 
+async def process_admin_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw_text = update.message.text.strip()
+    category = context.user_data.get('target_category')
+
+    try:
+        if "|" in raw_text:
+            prod_name, price_str = raw_text.split("|")
+            prod_name = prod_name.strip()
+            price_digits = ''.join(filter(str.isdigit, price_str))
+            price = int(price_digits)
+        else:
+            await update.message.reply_text("❌ Invalid format. Please use format like: `1 DAY KEY | 150 INR`", parse_mode="Markdown")
+            return ConversationHandler.END
+
+        btn_label = f"{prod_name} | {price} INR"
+        
+        # Strip category prefix for item name if present
+        clean_cat_name = category.replace("💎 ", "").replace("🤖 ", "").replace("📱 ", "").replace("🛠️ ", "").replace("📦 ", "").replace("✍️ ", "").replace("🔑 ", "").strip()
+        item_name = f"{clean_cat_name} {prod_name}"
+
+        conn = sqlite3.connect("shop_data.db")
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO products (category, btn_label, item_name, price) VALUES (?, ?, ?, ?)",
+            (category, btn_label, item_name, price)
+        )
+        conn.commit()
+        conn.close()
+
+        await update.message.reply_text(f"✅ **Successfully Added!**\n\n**Category:** {category}\n**Product:** {btn_label}", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text("❌ Failed to add product. Make sure to use format: `1 DAY KEY | 150 INR`", parse_mode="Markdown")
+
+    return ConversationHandler.END
+
+async def process_admin_edit_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw_text = update.message.text.strip()
+    p_id = context.user_data.get('target_pid')
+
+    try:
+        new_price = int(''.join(filter(str.isdigit, raw_text)))
+        
+        conn = sqlite3.connect("shop_data.db")
+        c = conn.cursor()
+        c.execute("SELECT btn_label, item_name FROM products WHERE id=?", (p_id,))
+        row = c.fetchone()
+        
+        if row:
+            old_label, item_name = row
+            # Update label with new price
+            duration_part = old_label.split("|")[0].strip()
+            new_label = f"{duration_part} | {new_price} INR"
+            
+            c.execute("UPDATE products SET btn_label=?, price=? WHERE id=?", (new_label, new_price, p_id))
+            conn.commit()
+            await update.message.reply_text(f"✅ **Price Updated Successfully!**\n\n**New Label:** {new_label}", parse_mode="Markdown")
+        conn.close()
+    except Exception as e:
+        await update.message.reply_text("❌ Invalid price entered. Please enter numbers only.")
+
+    return ConversationHandler.END
+
 async def process_admin_add_key(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key_code = update.message.text.strip().upper()
     conn = sqlite3.connect("shop_data.db")
@@ -528,6 +699,8 @@ def main():
             AWAITING_KEY_ADD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_add_key)],
             AWAITING_COUPON_ADD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_add_coupon)],
             AWAITING_BLOCK_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_block_user)],
+            AWAITING_PRODUCT_ADD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_add_product)],
+            AWAITING_PRICE_EDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_admin_edit_price)],
         },
         fallbacks=[],
         per_message=False
