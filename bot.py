@@ -8,9 +8,9 @@ from telegram.ext import (
 )
 
 # ================= CONFIGURATION =================
-TOKEN = "8973528979:AAGz1mp2bfRARk5uUZGVF2V6EjxDF92aAE4"
+TOKEN = "8986448248:AAH5rirPfxkZVVZHNYvWE080-kWHqWnXQck"
 UPI_ID = "8y0l1s2n7z76332@fbpe"
-ADMIN_ID = 5573430719
+ADMIN_ID = 8338184748
 
 # Conversation States
 AWAITING_COUPON = 1
