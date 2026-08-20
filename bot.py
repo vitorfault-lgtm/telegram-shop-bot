@@ -2,16 +2,16 @@ import os
 import sqlite3
 import qrcode
 from io import BytesIO
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, BotCommand
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler, 
     filters, ContextTypes, ConversationHandler
 )
 
 # ================= CONFIGURATION =================
-TOKEN = "8735916752:AAEBObUH1C4IJSvZMip9QPDY7FY_FtpsI-c"
+TOKEN = "8735916752:AAH8PiYhOyjw2rDRzA0upBifX5MEyMOR1cY"
 DEFAULT_UPI_ID = "bharatpe.8y0l1s2n7z76332@fbpe"
-ADMIN_ID = 6516079642  # Screenshot ke hisab se updated (Agar different hai toh apni ID daalna)
+ADMIN_ID = 6516079642
 CUSTOM_QR_PATH = "custom_qr.png"
 
 # Conversation States
@@ -166,31 +166,55 @@ def esc(text):
         return ""
     return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`')
 
-# ================= KEYBOARDS =================
+# ================= KEYBOARDS WITH ALL BLUE & CANCEL RED =================
 def get_user_menu():
     kb = [
-        [KeyboardButton("💎 Fluorite Keys"), KeyboardButton("🤖 Android Keys")],
-        [KeyboardButton("📱 Full iOS Panel"), KeyboardButton("🛠️ Full Android Panel")],
-        [KeyboardButton("📦 GBox"), KeyboardButton("✍️ Esign")],
-        [KeyboardButton("🔑 Monite Key"), KeyboardButton("👤 Profile")],
-        [KeyboardButton("📜 My Orders")]
+        [
+            KeyboardButton("💎 Fluorite Keys", style="primary"), 
+            KeyboardButton("🤖 Android Keys", style="primary")
+        ],
+        [
+            KeyboardButton("📱 Full iOS Panel", style="primary"), 
+            KeyboardButton("🛠️ Full Android Panel", style="primary")
+        ],
+        [
+            KeyboardButton("📦 GBox", style="primary"), 
+            KeyboardButton("✍️ Esign", style="primary")
+        ],
+        [
+            KeyboardButton("🔑 Monite Key", style="primary"), 
+            KeyboardButton("👤 Profile", style="success")
+        ],
+        [
+            KeyboardButton("📜 My Orders", style="success")
+        ]
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
 def get_admin_menu():
     kb = [
-        [KeyboardButton("📦 Manage Products"), KeyboardButton("📋 Orders")],
-        [KeyboardButton("🏷️ Discount Coupon"), KeyboardButton("💳 Payment Method")],
-        [KeyboardButton("🚫 Block User"), KeyboardButton("❌ Exit Admin")]
+        [
+            KeyboardButton("📦 Manage Products", style="primary"), 
+            KeyboardButton("📋 Orders", style="success")
+        ],
+        [
+            KeyboardButton("🏷️ Discount Coupon", style="primary"), 
+            KeyboardButton("💳 Payment Method", style="primary")
+        ],
+        [
+            KeyboardButton("🚫 Block User", style="danger"), 
+            KeyboardButton("❌ Exit Admin", style="danger")
+        ]
     ]
     return ReplyKeyboardMarkup(kb, resize_keyboard=True)
 
 def get_payment_buttons():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🏷️ Apply Discount Coupon", callback_data="prompt_coupon")],
-        [InlineKeyboardButton("📸 Upload Payment Screenshot", callback_data="prompt_upload_ss")],
-        [InlineKeyboardButton("💎 PAY IN BINANCE USDT", callback_data="req_binance_pay")],
-        [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment")]
+        [InlineKeyboardButton("🎟️ Apply Discount Coupon", callback_data="prompt_coupon", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("📤 Upload Payment Screenshot", callback_data="prompt_upload_ss", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("🪙 Pay in Binance USDT", callback_data="req_binance_pay", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment", api_kwargs={"style": "primary"})],
+        [InlineKeyboardButton("❌ Cancel Order", callback_data="cancel_order", api_kwargs={"style": "danger"})]
     ])
 
 # ================= COMMAND / START =================
@@ -232,8 +256,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     admin_btn = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Approve Order", callback_data=f"appr_{order_id}_{user.id}"),
-            InlineKeyboardButton("❌ Reject Order", callback_data=f"rejc_{order_id}_{user.id}")
+            InlineKeyboardButton("✅ Approve Order", callback_data=f"appr_{order_id}_{user.id}", api_kwargs={"style": "primary"}),
+            InlineKeyboardButton("❌ Reject Order", callback_data=f"rejc_{order_id}_{user.id}", api_kwargs={"style": "danger"})
         ]
     ])
 
@@ -278,9 +302,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             categories = get_categories_from_db()
             kb = []
             for cat in categories:
-                kb.append([InlineKeyboardButton(f"📁 {cat}", callback_data=f"admcat_{cat}")])
+                kb.append([InlineKeyboardButton(f"📁 {cat}", callback_data=f"admcat_{cat}", api_kwargs={"style": "primary"})])
             
-            kb.append([InlineKeyboardButton("➕ Add Key Stock", callback_data="admin_add_key"), InlineKeyboardButton("➖ Remove Key Stock", callback_data="admin_rem_key")])
+            kb.append([
+                InlineKeyboardButton("➕ Add Key Stock", callback_data="admin_add_key", api_kwargs={"style": "primary"}), 
+                InlineKeyboardButton("➖ Remove Key Stock", callback_data="admin_rem_key", api_kwargs={"style": "danger"})
+            ])
             await update.message.reply_text("📦 **Manage Product Categories & Price List:**\n\nSelect a category to edit prices or add new products:", reply_markup=InlineKeyboardMarkup(kb))
             return
 
@@ -298,8 +325,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for r in rows:
                 ord_id, u_id, item, amt, st = r
                 admin_btn = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("✅ Approve Order", callback_data=f"appr_{ord_id}_{u_id}"),
-                     InlineKeyboardButton("❌ Reject Order", callback_data=f"rejc_{ord_id}_{u_id}")]
+                    [
+                        InlineKeyboardButton("✅ Approve Order", callback_data=f"appr_{ord_id}_{u_id}", api_kwargs={"style": "primary"}),
+                        InlineKeyboardButton("❌ Reject Order", callback_data=f"rejc_{ord_id}_{u_id}", api_kwargs={"style": "danger"})
+                    ]
                 ])
                 msg = (
                     f"📋 **Order #{ord_id}**\n\n"
@@ -313,21 +342,27 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif text == "🏷️ Discount Coupon":
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Add Coupon", callback_data="admin_add_coupon"), InlineKeyboardButton("➖ Remove Coupon", callback_data="admin_rem_coupon")]
+                [
+                    InlineKeyboardButton("➕ Add Coupon", callback_data="admin_add_coupon", api_kwargs={"style": "primary"}), 
+                    InlineKeyboardButton("➖ Remove Coupon", callback_data="admin_rem_coupon", api_kwargs={"style": "danger"})
+                ]
             ])
             await update.message.reply_text("🏷️ **Manage Discount Coupons:**", reply_markup=kb)
             return
 
         elif text == "💳 Payment Method":
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✏️ Edit UPI ID", callback_data="admin_edit_upi"), InlineKeyboardButton("🖼️ Change QR", callback_data="admin_change_qr")]
+                [
+                    InlineKeyboardButton("✏️ Edit UPI ID", callback_data="admin_edit_upi", api_kwargs={"style": "primary"}), 
+                    InlineKeyboardButton("🖼️ Change QR", callback_data="admin_change_qr", api_kwargs={"style": "primary"})
+                ]
             ])
             current_upi = get_current_upi()
             await update.message.reply_text(f"💳 **Payment Method Configuration:**\n\nCurrent UPI ID: `{current_upi}`", parse_mode="Markdown", reply_markup=kb)
             return
 
         elif text == "🚫 Block User":
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Enter User ID/Username to Block", callback_data="admin_block_prompt")]])
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Enter User ID/Username to Block", callback_data="admin_block_prompt", api_kwargs={"style": "danger"})]])
             await update.message.reply_text("🚫 **Block User Panel:**", reply_markup=kb)
             return
 
@@ -343,7 +378,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = []
         for p_id, btn_label, item_name, price in products:
             cb_data = f"pay_{item_name}_{price}"
-            kb.append([InlineKeyboardButton(btn_label, callback_data=cb_data)])
+            kb.append([InlineKeyboardButton(btn_label, callback_data=cb_data, api_kwargs={"style": "primary"})])
         
         await update.message.reply_text(f"Select option for {text}:", reply_markup=InlineKeyboardMarkup(kb))
 
@@ -359,7 +394,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = c.fetchall()
         conn.close()
 
-        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment")]])
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment", api_kwargs={"style": "primary"})]])
 
         if not rows:
             await update.message.reply_text("📜 **Your Order History**\n\nYou haven't placed any orders yet!", parse_mode="Markdown", reply_markup=back_kb)
@@ -386,11 +421,33 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "close_payment":
         await query.answer("Returned to Main Menu")
-        await query.message.delete()
+        try:
+            await query.message.delete()
+        except:
+            pass
+
+    elif data == "cancel_order":
+        await query.answer("Order Cancelled")
+        menu_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Main Menu", callback_data="close_payment", api_kwargs={"style": "primary"})]])
+        cancel_text = "❌ **Order cancelled successfully.** Please press main menu to back to the menu."
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=cancel_text,
+            parse_mode="Markdown",
+            reply_markup=menu_kb
+        )
+
+    elif data.startswith("copykey_"):
+        k_code = data.split("_", 1)[1]
+        await query.answer(f"Key: {k_code}", show_alert=True)
 
     elif data == "prompt_upload_ss":
         await query.answer()
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment", api_kwargs={"style": "primary"})]])
         await query.message.reply_text("📸 **Please share the payment screenshot in the chat now:**", parse_mode="Markdown", reply_markup=kb)
 
     elif data == "prompt_coupon":
@@ -426,8 +483,8 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         admin_btn = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("🔗 Generate & Send PAYMENT LINK", callback_data=f"genbinlink_{user.id}"),
-                InlineKeyboardButton("❌ REJECT ORDER", callback_data=f"binrej_{user.id}")
+                InlineKeyboardButton("🔗 Generate & Send PAYMENT LINK", callback_data=f"genbinlink_{user.id}", api_kwargs={"style": "primary"}),
+                InlineKeyboardButton("❌ REJECT ORDER", callback_data=f"binrej_{user.id}", api_kwargs={"style": "danger"})
             ]
         ])
 
@@ -457,7 +514,7 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Order Rejected")
         target_uid = data.split("_")[1]
         
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment", api_kwargs={"style": "primary"})]])
         rejection_text = "sorry we couldn't process your payment right now plz tryagain later"
         
         await context.bot.send_message(chat_id=int(target_uid), text=rejection_text, reply_markup=kb)
@@ -485,7 +542,10 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg += f"• {btn_label}\n"
             
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Edit Prices", callback_data=f"admeditp_{category}"), InlineKeyboardButton("➕ Add Product", callback_data=f"admaddp_{category}")]
+            [
+                InlineKeyboardButton("✏️ Edit Prices", callback_data=f"admeditp_{category}", api_kwargs={"style": "primary"}), 
+                InlineKeyboardButton("➕ Add Product", callback_data=f"admaddp_{category}", api_kwargs={"style": "primary"})
+            ]
         ])
         await query.message.reply_text(msg, parse_mode="Markdown", reply_markup=kb)
 
@@ -508,7 +568,7 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         kb = []
         for p_id, btn_label, _, _ in products:
-            kb.append([InlineKeyboardButton(f"✏️ {btn_label}", callback_data=f"selpedit_{p_id}")])
+            kb.append([InlineKeyboardButton(f"✏️ {btn_label}", callback_data=f"selpedit_{p_id}", api_kwargs={"style": "primary"})])
             
         await query.message.reply_text("Select product to edit price:", reply_markup=InlineKeyboardMarkup(kb))
 
@@ -541,9 +601,12 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ **Payment Approved!**\n\n"
                 f"Thank you for your purchase. Here is your Key:\n\n"
                 f"🔑 `{key_code}`\n\n"
-                f"*(Tap key code to copy)*"
+                f"*(Tap button below to copy)*"
             )
-            await context.bot.send_message(chat_id=int(user_id), text=delivery_msg, parse_mode="Markdown")
+            delivery_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 Tap to Copy Key", callback_data=f"copykey_{key_code}", api_kwargs={"style": "primary"})]
+            ])
+            await context.bot.send_message(chat_id=int(user_id), text=delivery_msg, parse_mode="Markdown", reply_markup=delivery_kb)
             
             updated_caption = f"{query.message.caption}\n\n🟢 **ORDER STATE: COMPLETED & DELIVERED**"
             await query.edit_message_caption(caption=updated_caption, reply_markup=None, parse_mode="Markdown")
@@ -586,7 +649,7 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("No keys available in stock.")
             return
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ Delete {r[1]}", callback_data=f"delkey_{r[0]}")] for r in rows])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ Delete {r[1]}", callback_data=f"delkey_{r[0]}", api_kwargs={"style": "danger"})] for r in rows])
         await query.message.reply_text("Tap key to remove:", reply_markup=kb)
 
     elif data.startswith("delkey_"):
@@ -612,7 +675,7 @@ async def button_tap(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = c.fetchall()
         conn.close()
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ Remove {r[0]}", callback_data=f"delcoup_{r[0]}")] for r in rows])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"❌ Remove {r[0]}", callback_data=f"delcoup_{r[0]}", api_kwargs={"style": "danger"})] for r in rows])
         await query.message.reply_text("Tap coupon code to delete:", reply_markup=kb)
 
     elif data.startswith("delcoup_"):
@@ -646,7 +709,7 @@ async def process_user_coupon(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data['discounted_amount'] = new_amount
         context.user_data['discount_saved'] = discount
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Proceed to Updated Payment Portal", callback_data="show_updated_payment")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Proceed to Updated Payment Portal", callback_data="show_updated_payment", api_kwargs={"style": "primary"})]])
         await update.message.reply_text(f"🎉 **Congratulations!** You got **Flat ₹{discount} Discount!**", parse_mode="Markdown", reply_markup=kb)
     else:
         await update.message.reply_text("❌ **Invalid Coupon Code.** Please try again.")
@@ -776,17 +839,12 @@ async def process_admin_binance_link(update: Update, context: ContextTypes.DEFAU
     target_uid = context.user_data.get('target_binance_uid')
 
     if target_uid:
-        user_kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 Upload Payment Screenshot", callback_data="prompt_upload_ss")],
-            [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="close_payment")]
-        ])
-
         msg = (
-            f"plz complete your payment through the given link below\n\n"
-            f"🔗 {link}"
+            f"🔗 **Your Binance Payment Link is Ready!**\n\n"
+            f"Please complete your payment through the link below:\n{link}"
         )
 
-        await context.bot.send_message(chat_id=int(target_uid), text=msg, reply_markup=user_kb)
+        await context.bot.send_message(chat_id=int(target_uid), text=msg, parse_mode="Markdown", reply_markup=get_payment_buttons())
         await update.message.reply_text("✅ Payment link sent to user successfully!")
 
     return ConversationHandler.END
@@ -821,7 +879,10 @@ async def send_payment_qr(chat_id, context, item_name, amount, message_obj=None,
     )
 
     if message_obj:
-        await message_obj.delete()
+        try:
+            await message_obj.delete()
+        except:
+            pass
         
     await context.bot.send_photo(
         chat_id=chat_id,
@@ -831,9 +892,16 @@ async def send_payment_qr(chat_id, context, item_name, amount, message_obj=None,
         reply_markup=get_payment_buttons()
     )
 
+# ================= POST INIT (SET MENU COMMANDS) =================
+async def post_init(application: Application):
+    commands = [
+        BotCommand("start", "Start the store bot and open main menu")
+    ]
+    await application.bot.set_my_commands(commands)
+
 # ================= MAIN FUNCTION =================
 def main():
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(post_init).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(button_tap)],
