@@ -217,6 +217,11 @@ def get_payment_buttons():
         [InlineKeyboardButton("❌ Cancel Order", callback_data="cancel_order", api_kwargs={"style": "danger"})]
     ])
 
+def get_single_cancel_button():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancel Order", callback_data="cancel_order", api_kwargs={"style": "danger"})]
+    ])
+
 # ================= COMMAND / START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -844,7 +849,7 @@ async def process_admin_binance_link(update: Update, context: ContextTypes.DEFAU
             f"Please complete your payment through the link below:\n{link}"
         )
 
-        await context.bot.send_message(chat_id=int(target_uid), text=msg, parse_mode="Markdown", reply_markup=get_payment_buttons())
+        await context.bot.send_message(chat_id=int(target_uid), text=msg, parse_mode="Markdown", reply_markup=get_single_cancel_button())
         await update.message.reply_text("✅ Payment link sent to user successfully!")
 
     return ConversationHandler.END
