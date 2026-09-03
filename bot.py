@@ -9,7 +9,7 @@ from telegram.ext import (
 )
 
 # ================= CONFIGURATION =================
-TOKEN = "8735916752:AAH8PiYhOyjw2rDRzA0upBifX5MEyMOR1cY"
+TOKEN = "8735916752:AAEb_JiICjtVWSwv1iWxPhTBiMh54Tj8MFo"
 DEFAULT_UPI_ID = "bharatpe.8y0l1s2n7z76332@fbpe"
 ADMIN_ID = 6516079642
 CUSTOM_QR_PATH = "custom_qr.png"
